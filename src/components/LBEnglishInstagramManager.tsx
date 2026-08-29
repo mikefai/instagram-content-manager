@@ -103,8 +103,62 @@ interface ContentIdea {
 }
 // Helper functions
 const formatDate = (date: Date): string => {
-  return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(date);
+  const d = date instanceof Date ? date : new Date(date);
+  return isNaN(d.getTime()) ? 'Invalid Date' : new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(d);
 };
+
+const STORAGE_KEYS = {
+  POSTS: 'lb_posts_v1',
+  CAMPAIGNS: 'lb_campaigns_v1',
+  AUDIENCE: 'lb_audience_v1',
+  WORKFLOWS: 'lb_workflows_v1',
+  WEBHOOKS: 'lb_webhooks_v1',
+  IDEAS: 'lb_ideas_v1',
+  IS_INITIALIZED: 'lb_is_initialized_v1',
+};
+
+// Local storage helper
+const loadStoredData = <T,>(key: string, fallback: T, reviveItem?: (item: any) => any): T => {
+  try {
+    const item = localStorage.getItem(key);
+    if (!item) return fallback;
+    const parsed = JSON.parse(item);
+    if (reviveItem && Array.isArray(parsed)) {
+      return parsed.map(reviveItem) as unknown as T;
+    }
+    return parsed;
+  } catch (error) {
+    console.error(`Error reading ${key} from localStorage`, error);
+    return fallback;
+  }
+};
+
+const revivePost = (p: any): ContentPost => ({
+  ...p,
+  scheduledDate: p.scheduledDate ? new Date(p.scheduledDate) : new Date(),
+  createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+});
+
+const reviveCampaign = (c: any): Campaign => ({
+  ...c,
+  startDate: c.startDate ? new Date(c.startDate) : new Date(),
+  endDate: c.endDate ? new Date(c.endDate) : new Date(),
+});
+
+const reviveWorkflow = (w: any): Workflow => ({
+  ...w,
+  createdAt: w.createdAt ? new Date(w.createdAt) : new Date(),
+});
+
+const reviveWebhook = (wh: any): Webhook => ({
+  ...wh,
+  lastTriggered: wh.lastTriggered ? new Date(wh.lastTriggered) : null,
+});
+
+const reviveIdea = (i: any): ContentIdea => ({
+  ...i,
+  createdAt: i.createdAt ? new Date(i.createdAt) : new Date(),
+});
 
 const formatNumber = (num: number): string => {
   return new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(num);
@@ -184,15 +238,115 @@ const initialContentIdeas: ContentIdea[] = [
 
 // Main Component
 const LBEnglishInstagramManager: React.FC = () => {
-  const [posts, setPosts] = useState<ContentPost[]>(initialPosts);
-  const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
-  const [audienceSegments, setAudienceSegments] = useState<AudienceSegment[]>(initialAudienceSegments);
-  const [workflows, setWorkflows] = useState<Workflow[]>(initialWorkflows);
-  const [webhooks, setWebhooks] = useState<Webhook[]>(initialWebhooks);
-  const [contentIdeas, setContentIdeas] = useState<ContentIdea[]>(initialContentIdeas);
+  const [posts, setPosts] = useState<ContentPost[]>(() =>
+    loadStoredData(STORAGE_KEYS.POSTS, initialPosts, revivePost)
+  );
+  const [campaigns, setCampaigns] = useState<Campaign[]>(() =>
+    loadStoredData(STORAGE_KEYS.CAMPAIGNS, initialCampaigns, reviveCampaign)
+  );
+  const [audienceSegments, setAudienceSegments] = useState<AudienceSegment[]>(() =>
+    loadStoredData(STORAGE_KEYS.AUDIENCE, initialAudienceSegments)
+  );
+  const [workflows, setWorkflows] = useState<Workflow[]>(() =>
+    loadStoredData(STORAGE_KEYS.WORKFLOWS, initialWorkflows, reviveWorkflow)
+  );
+  const [webhooks, setWebhooks] = useState<Webhook[]>(() =>
+    loadStoredData(STORAGE_KEYS.WEBHOOKS, initialWebhooks, reviveWebhook)
+  );
+  const [contentIdeas, setContentIdeas] = useState<ContentIdea[]>(() =>
+    loadStoredData(STORAGE_KEYS.IDEAS, initialContentIdeas, reviveIdea)
+  );
   const [activeTab, setActiveTab] = useState('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAudience, setSelectedAudience] = useState<string[]>([]);
+
+  // Sync to localStorage
+  React.useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.POSTS, JSON.stringify(posts));
+  }, [posts]);
+
+  React.useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.CAMPAIGNS, JSON.stringify(campaigns));
+  }, [campaigns]);
+
+  React.useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.AUDIENCE, JSON.stringify(audienceSegments));
+  }, [audienceSegments]);
+
+  React.useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.WORKFLOWS, JSON.stringify(workflows));
+  }, [workflows]);
+
+  React.useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.WEBHOOKS, JSON.stringify(webhooks));
+  }, [webhooks]);
+
+  React.useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.IDEAS, JSON.stringify(contentIdeas));
+  }, [contentIdeas]);
+
+  // Actions for data management
+  const handleClearAllData = () => {
+    setPosts([]);
+    setCampaigns([]);
+    setAudienceSegments([]);
+    setWorkflows([]);
+    setWebhooks([]);
+    setContentIdeas([]);
+    toast.success('All data has been cleared for personal usage');
+  };
+
+  const handleResetToSampleData = () => {
+    setPosts(initialPosts);
+    setCampaigns(initialCampaigns);
+    setAudienceSegments(initialAudienceSegments);
+    setWorkflows(initialWorkflows);
+    setWebhooks(initialWebhooks);
+    setContentIdeas(initialContentIdeas);
+    toast.success('Sample data restored');
+  };
+
+  const handleExportData = () => {
+    const data = {
+      posts,
+      campaigns,
+      audienceSegments,
+      workflows,
+      webhooks,
+      contentIdeas,
+      exportedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `instagram-manager-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Data exported successfully');
+  };
+
+  const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        if (data.posts) setPosts(data.posts.map(revivePost));
+        if (data.campaigns) setCampaigns(data.campaigns.map(reviveCampaign));
+        if (data.audienceSegments) setAudienceSegments(data.audienceSegments);
+        if (data.workflows) setWorkflows(data.workflows.map(reviveWorkflow));
+        if (data.webhooks) setWebhooks(data.webhooks.map(reviveWebhook));
+        if (data.contentIdeas) setContentIdeas(data.contentIdeas.map(reviveIdea));
+        toast.success('Data imported successfully');
+      } catch (err) {
+        toast.error('Failed to parse backup file');
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  };
 // Calculate metrics
   const metrics = useMemo(() => {
     const totalPosts = posts.length;
@@ -209,23 +363,52 @@ const LBEnglishInstagramManager: React.FC = () => {
     return { totalPosts, publishedPosts, scheduledPosts, totalReach, totalEngagement, engagementRate, totalAudience, activeCampaigns, activeWebhooks, activeWorkflows };
   }, [posts, campaigns, audienceSegments, webhooks, workflows]);
 
-  // Chart data
-  const reachData = useMemo(() => [
-    { name: 'Jan', reach: 12000, planned: 15000 },
-    { name: 'Feb', reach: 18000, planned: 20000 },
-    { name: 'Mar', reach: 22000, planned: 25000 },
-    { name: 'Apr', reach: 25000, planned: 28000 },
-    { name: 'May', reach: 32000, planned: 35000 },
-    { name: 'Jun', reach: 28000, planned: 30000 },
-    { name: 'Jul', reach: 35000, planned: 40000 },
-    { name: 'Aug', reach: 42000, planned: 45000 },
-  ], []);
+  // Dynamic Chart data
+  const reachData = useMemo(() => {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const today = new Date();
+    const monthsMap: Record<string, { reach: number; planned: number }> = {};
+
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const mName = monthNames[d.getMonth()];
+      monthsMap[mName] = { reach: 0, planned: 0 };
+    }
+
+    posts.forEach(p => {
+      const date = p.scheduledDate instanceof Date ? p.scheduledDate : new Date(p.scheduledDate);
+      if (isNaN(date.getTime())) return;
+      const mName = monthNames[date.getMonth()];
+      if (monthsMap[mName]) {
+        if (p.status === 'published') {
+          monthsMap[mName].reach += p.reach || 0;
+        } else {
+          monthsMap[mName].planned += 1000;
+        }
+      }
+    });
+
+    campaigns.forEach(c => {
+      const date = c.startDate instanceof Date ? c.startDate : new Date(c.startDate);
+      if (isNaN(date.getTime())) return;
+      const mName = monthNames[date.getMonth()];
+      if (monthsMap[mName]) {
+        monthsMap[mName].reach += c.reach || 0;
+      }
+    });
+
+    return Object.entries(monthsMap).map(([name, val]) => ({
+      name,
+      reach: val.reach,
+      planned: val.planned,
+    }));
+  }, [posts, campaigns]);
 
   const engagementData = useMemo(() => [
-    { name: 'Likes', value: posts.filter(p => p.status === 'published').reduce((sum, p) => sum + p.likes, 0), fill: '#10B981' },
-    { name: 'Comments', value: posts.filter(p => p.status === 'published').reduce((sum, p) => sum + p.comments, 0), fill: '#3B82F6' },
-    { name: 'Shares', value: posts.filter(p => p.status === 'published').reduce((sum, p) => sum + p.shares, 0), fill: '#8B5CF6' },
-    { name: 'Saves', value: posts.filter(p => p.status === 'published').reduce((sum, p) => sum + p.saves, 0), fill: '#F59E0B' },
+    { name: 'Likes', value: posts.filter(p => p.status === 'published').reduce((sum, p) => sum + (p.likes || 0), 0), fill: '#10B981' },
+    { name: 'Comments', value: posts.filter(p => p.status === 'published').reduce((sum, p) => sum + (p.comments || 0), 0), fill: '#3B82F6' },
+    { name: 'Shares', value: posts.filter(p => p.status === 'published').reduce((sum, p) => sum + (p.shares || 0), 0), fill: '#8B5CF6' },
+    { name: 'Saves', value: posts.filter(p => p.status === 'published').reduce((sum, p) => sum + (p.saves || 0), 0), fill: '#F59E0B' },
   ], [posts]);
 
   const audienceData = useMemo(() => audienceSegments.map(a => ({ name: a.name, value: a.size })), [audienceSegments]);
@@ -403,10 +586,54 @@ return (
                 <Bell className="h-4 w-4" />
                 <span>Notifications</span>
               </Button>
-              <Button variant="ghost" size="sm" className="flex items-center space-x-2">
-                <Settings className="h-4 w-4" />
-                <span>Settings</span>
-              </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+                    <Settings className="h-4 w-4" />
+                    <span>Settings</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Account & Data Settings</DialogTitle>
+                    <DialogDescription>
+                      Manage data persistence, demo data, and backups for personal usage.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-6 py-4">
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-semibold">Demo Data Removal / Toggle</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Clear demo data to start fresh for your personal Instagram management, or restore default sample data anytime.
+                      </p>
+                      <div className="flex flex-col gap-2 pt-2">
+                        <Button variant="destructive" size="sm" onClick={handleClearAllData}>
+                          <Trash2 className="h-4 w-4 mr-2" /> Clear All Data (Personal Mode)
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={handleResetToSampleData}>
+                          <Repeat className="h-4 w-4 mr-2" /> Restore Sample Demo Data
+                        </Button>
+                      </div>
+                    </div>
+                    <Separator />
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-semibold">Backup & Restore</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Export your current posts, campaigns, and audience data to a JSON file or import a previous backup.
+                      </p>
+                      <div className="flex items-center space-x-2 pt-2">
+                        <Button variant="secondary" size="sm" className="flex-1" onClick={handleExportData}>
+                          Export Data
+                        </Button>
+                        <Label htmlFor="import-data-file" className="flex-1 cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3">
+                          Import Data
+                          <input id="import-data-file" type="file" accept=".json" onChange={handleImportData} className="sr-only" />
+                        </Label>
+                      </div>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </div>
@@ -627,30 +854,42 @@ return (
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {[...posts.slice(0, 3), ...campaigns.slice(0, 2)].sort((a, b) => {
-                        const aDate = 'scheduledDate' in a ? a.scheduledDate : a.startDate;
-                        const bDate = 'scheduledDate' in b ? b.scheduledDate : b.startDate;
-                        return bDate.getTime() - aDate.getTime();
-                      }).map((item, index) => {
-                        const isPost = 'type' in item;
-                        return (
-                          <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
-                            <div className="flex items-center space-x-4">
-                              <div className={`p-2 rounded-full ${isPost ? 'bg-blue-100' : 'bg-green-100'}`}>
-                                {isPost ? <FileText className="h-4 w-4 text-blue-600" /> : <Target className="h-4 w-4 text-green-600" />}
+                      {posts.length === 0 && campaigns.length === 0 ? (
+                        <div className="text-center py-6 text-muted-foreground flex flex-col items-center justify-center space-y-2">
+                          <Clock className="h-8 w-8 text-gray-400" />
+                          <p>No recent activity yet. Start by creating a post or campaign.</p>
+                          <Button size="sm" variant="outline" onClick={() => setActiveTab('content')}>
+                            Go to Content Manager
+                          </Button>
+                        </div>
+                      ) : (
+                        [...posts.slice(0, 3), ...campaigns.slice(0, 2)].sort((a, b) => {
+                          const aDate = 'scheduledDate' in a ? a.scheduledDate : a.startDate;
+                          const bDate = 'scheduledDate' in b ? b.scheduledDate : b.startDate;
+                          const aTime = aDate instanceof Date ? aDate.getTime() : new Date(aDate).getTime();
+                          const bTime = bDate instanceof Date ? bDate.getTime() : new Date(bDate).getTime();
+                          return bTime - aTime;
+                        }).map((item, index) => {
+                          const isPost = 'type' in item;
+                          return (
+                            <div key={index} className="flex items-center justify-between p-4 border rounded-lg">
+                              <div className="flex items-center space-x-4">
+                                <div className={`p-2 rounded-full ${isPost ? 'bg-blue-100' : 'bg-green-100'}`}>
+                                  {isPost ? <FileText className="h-4 w-4 text-blue-600" /> : <Target className="h-4 w-4 text-green-600" />}
+                                </div>
+                                <div>
+                                  <p className="font-medium">{'title' in item ? item.title : item.name}</p>
+                                  <p className="text-sm text-muted-foreground">{formatDate('scheduledDate' in item ? item.scheduledDate : item.startDate)}</p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="font-medium">{'title' in item ? item.title : item.name}</p>
-                                <p className="text-sm text-muted-foreground">{formatDate('scheduledDate' in item ? item.scheduledDate : item.startDate)}</p>
+                              <div className="flex items-center space-x-4">
+                                <Badge className={getStatusColor(item.status)}>{item.status}</Badge>
+                                <span className="text-sm font-medium">{formatNumber(item.reach)}</span>
                               </div>
                             </div>
-                            <div className="flex items-center space-x-4">
-                              <Badge className={getStatusColor(item.status)}>{item.status}</Badge>
-                              <span className="text-sm font-medium">{formatNumber(item.reach)}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
+                          );
+                        })
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -885,6 +1124,17 @@ return (
                   </Dialog>
                 </div>
 
+                {campaigns.length === 0 ? (
+                  <Card className="p-12 text-center flex flex-col items-center justify-center space-y-4">
+                    <Target className="h-12 w-12 text-muted-foreground" />
+                    <div>
+                      <h3 className="text-lg font-semibold">No campaigns created yet</h3>
+                      <p className="text-sm text-muted-foreground max-w-sm mt-1">
+                        Start tracking your marketing campaigns, setting budgets, and monitoring reach.
+                      </p>
+                    </div>
+                  </Card>
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {campaigns.map((campaign) => (
                     <Card key={campaign.id} className="hover:shadow-lg transition-shadow">
@@ -928,6 +1178,7 @@ return (
                     </Card>
                   ))}
                 </div>
+                )}
               </TabsContent>
 {/* Audience Tab */}
               <TabsContent value="audience" className="space-y-4">
@@ -982,6 +1233,17 @@ return (
                     </DialogContent>
                   </Dialog>
                 </div>
+                {audienceSegments.length === 0 ? (
+                  <Card className="p-12 text-center flex flex-col items-center justify-center space-y-4">
+                    <Users className="h-12 w-12 text-muted-foreground" />
+                    <div>
+                      <h3 className="text-lg font-semibold">No audience segments defined</h3>
+                      <p className="text-sm text-muted-foreground max-w-sm mt-1">
+                        Define target audiences by age range, location, and interests for optimized content reach.
+                      </p>
+                    </div>
+                  </Card>
+                ) : (
 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {audienceSegments.map((segment) => (
                     <Card key={segment.id} className="hover:shadow-lg transition-shadow">
@@ -1027,6 +1289,7 @@ return (
                     </Card>
                   ))}
                 </div>
+                )}
               </TabsContent>
 {/* Workflows Tab */}
               <TabsContent value="workflows" className="space-y-4">
@@ -1087,6 +1350,17 @@ return (
                     </DialogContent>
                   </Dialog>
                 </div>
+                {workflows.length === 0 ? (
+                  <Card className="p-12 text-center flex flex-col items-center justify-center space-y-4">
+                    <Repeat className="h-12 w-12 text-muted-foreground" />
+                    <div>
+                      <h3 className="text-lg font-semibold">No automation workflows configured</h3>
+                      <p className="text-sm text-muted-foreground max-w-sm mt-1">
+                        Create custom rules to automatically trigger alerts, team notifications, or tasks.
+                      </p>
+                    </div>
+                  </Card>
+                ) : (
 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {workflows.map((workflow) => (
                     <Card key={workflow.id} className="hover:shadow-lg transition-shadow">
@@ -1120,6 +1394,7 @@ return (
                     </Card>
                   ))}
                 </div>
+                )}
               </TabsContent>
 {/* Webhooks Tab */}
               <TabsContent value="webhooks" className="space-y-4">
@@ -1170,6 +1445,17 @@ return (
                   </Dialog>
                 </div>
 
+                {webhooks.length === 0 ? (
+                  <Card className="p-12 text-center flex flex-col items-center justify-center space-y-4">
+                    <Send className="h-12 w-12 text-muted-foreground" />
+                    <div>
+                      <h3 className="text-lg font-semibold">No webhooks registered</h3>
+                      <p className="text-sm text-muted-foreground max-w-sm mt-1">
+                        Connect external APIs, Slack integrations, or external automation pipelines.
+                      </p>
+                    </div>
+                  </Card>
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {webhooks.map((webhook) => (
                     <Card key={webhook.id} className="hover:shadow-lg transition-shadow">
@@ -1199,6 +1485,7 @@ return (
                     </Card>
                   ))}
                 </div>
+                )}
               </TabsContent>
 {/* Ideas Tab */}
               <TabsContent value="ideas" className="space-y-4">
@@ -1270,6 +1557,17 @@ return (
                   </Dialog>
                 </div>
 
+                {contentIdeas.length === 0 ? (
+                  <Card className="p-12 text-center flex flex-col items-center justify-center space-y-4">
+                    <Lightbulb className="h-12 w-12 text-muted-foreground" />
+                    <div>
+                      <h3 className="text-lg font-semibold">No content ideas saved</h3>
+                      <p className="text-sm text-muted-foreground max-w-sm mt-1">
+                        Brainstorm and store prospective ideas, calculate reach estimations, and track approvals.
+                      </p>
+                    </div>
+                  </Card>
+                ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {contentIdeas.map((idea) => (
                     <Card key={idea.id} className="hover:shadow-lg transition-shadow">
@@ -1313,6 +1611,7 @@ return (
                     </Card>
                   ))}
                 </div>
+                )}
               </TabsContent>
 </Tabs>
           </div>
