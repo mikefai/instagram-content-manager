@@ -307,4 +307,15 @@ function useToast() {
   };
 }
 
-export { toast, useToast };
+/**
+ * Convenience helpers used by the dashboard's `toast.success(...)` /
+ * `toast.error(...)` calls (shadcn's base `toast()` takes an object).
+ */
+const toastApi = Object.assign(toast, {
+  success: (title: string, description?: string) =>
+    toast({ title, description }),
+  error: (title: string, description?: string) =>
+    toast({ title, description, variant: "destructive" }),
+});
+
+export { toastApi as toast, useToast };

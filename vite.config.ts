@@ -16,4 +16,26 @@ export default defineConfig({
       "nucleo-sharp": path.resolve(dirname, "./src/lib/nucleo-sharp.tsx"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split heavy vendor libraries out of the app bundle.
+        manualChunks: {
+          recharts: ["recharts"],
+          radix: [
+            "@radix-ui/react-checkbox",
+            "@radix-ui/react-dialog",
+            "@radix-ui/react-label",
+            "@radix-ui/react-progress",
+            "@radix-ui/react-select",
+            "@radix-ui/react-separator",
+            "@radix-ui/react-slot",
+            "@radix-ui/react-tabs",
+            "@radix-ui/react-toast",
+          ],
+          lucide: ["lucide-react"],
+        },
+      },
+    },
+  },
 });
