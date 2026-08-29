@@ -76,8 +76,13 @@ migrated to real Nucleo names.
 
 ## Deployment
 
-Any static host works (Vercel, Netlify, GitHub Pages, nginx). Build output
-lands in `dist/`.
+Any static host works (Vercel, Netlify, nginx). Build output lands in `dist/`.
+
+**GitHub Pages** is wired up: `.github/workflows/deploy.yml` builds and
+deploys the app on every push to `main`
+(https://mikefai.github.io/instagram-content-manager/). The Vite `base` path
+is set automatically from `GITHUB_REPOSITORY`, so local builds/dev are
+unaffected.
 
 ## License
 

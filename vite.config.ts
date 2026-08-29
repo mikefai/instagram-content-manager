@@ -6,6 +6,11 @@ import react from "@vitejs/plugin-react";
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  // GitHub Pages hosts project sites under a subpath (/instagram-content-manager/).
+  // On GitHub Actions GITHUB_REPOSITORY="owner/repo" → base="/repo/"; locally "/".
+  base: process.env.GITHUB_REPOSITORY
+    ? `/${process.env.GITHUB_REPOSITORY.split("/")[1]}/`
+    : "/",
   plugins: [react()],
   resolve: {
     alias: {
