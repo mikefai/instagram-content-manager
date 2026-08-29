@@ -259,6 +259,8 @@ const LBEnglishInstagramManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAudience, setSelectedAudience] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
 
   // Sync to localStorage
   React.useEffect(() => {
@@ -426,9 +428,11 @@ const LBEnglishInstagramManager: React.FC = () => {
         post.caption.toLowerCase().includes(searchQuery.toLowerCase()) ||
         post.hashtags.some(h => h.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesAudience = selectedAudience.length === 0 || post.targetAudience.some(a => selectedAudience.includes(a));
-      return matchesSearch && matchesAudience;
+      const matchesStatus = statusFilter === 'all' || post.status === statusFilter;
+      const matchesType = typeFilter === 'all' || post.type === typeFilter;
+      return matchesSearch && matchesAudience && matchesStatus && matchesType;
     });
-  }, [posts, searchQuery, selectedAudience]);
+  }, [posts, searchQuery, selectedAudience, statusFilter, typeFilter]);
 
   // Add new post
   const [newPost, setNewPost] = useState<Partial<ContentPost>>({ type: 'image', status: 'draft', targetAudience: [], hashtags: [] });
@@ -559,10 +563,40 @@ const LBEnglishInstagramManager: React.FC = () => {
     toast.success('Post deleted successfully');
   };
 
+  // Delete campaign
+  const handleDeleteCampaign = (campaignId: string) => {
+    setCampaigns(campaigns.filter(c => c.id !== campaignId));
+    toast.success('Campaign deleted successfully');
+  };
+
+  // Delete audience segment
+  const handleDeleteAudience = (audienceId: string) => {
+    setAudienceSegments(audienceSegments.filter(a => a.id !== audienceId));
+    toast.success('Audience segment deleted successfully');
+  };
+
+  // Delete workflow
+  const handleDeleteWorkflow = (workflowId: string) => {
+    setWorkflows(workflows.filter(w => w.id !== workflowId));
+    toast.success('Workflow deleted successfully');
+  };
+
+  // Delete webhook
+  const handleDeleteWebhook = (webhookId: string) => {
+    setWebhooks(webhooks.filter(w => w.id !== webhookId));
+    toast.success('Webhook deleted successfully');
+  };
+
   // Update idea status
   const handleUpdateIdeaStatus = (ideaId: string, newStatus: ContentIdea['status']) => {
     setContentIdeas(contentIdeas.map(idea => idea.id === ideaId ? { ...idea, status: newStatus } : idea));
     toast.success(`Idea status updated to ${newStatus}`);
+  };
+
+  // Delete idea
+  const handleDeleteIdea = (ideaId: string) => {
+    setContentIdeas(contentIdeas.filter(i => i.id !== ideaId));
+    toast.success('Idea deleted successfully');
   };
 return (
     <div className="min-h-screen bg-gray-50">
@@ -975,9 +1009,35 @@ return (
                   </Dialog>
                 </div>
 <Card>
-                  <CardHeader>
-                    <CardTitle>Content Calendar</CardTitle>
-                    <CardDescription>{filteredPosts.length} posts found</CardDescription>
+                  <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div>
+                      <CardTitle>Content Calendar</CardTitle>
+                      <CardDescription>{filteredPosts.length} posts found</CardDescription>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger className="w-32 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Statuses</SelectItem>
+                          <SelectItem value="draft">Draft</SelectItem>
+                          <SelectItem value="scheduled">Scheduled</SelectItem>
+                          <SelectItem value="published">Published</SelectItem>
+                          <SelectItem value="archived">Archived</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={typeFilter} onValueChange={setTypeFilter}>
+                        <SelectTrigger className="w-32 text-xs"><SelectValue placeholder="Type" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Types</SelectItem>
+                          <SelectItem value="image">Image</SelectItem>
+                          <SelectItem value="video">Video</SelectItem>
+                          <SelectItem value="reel">Reel</SelectItem>
+                          <SelectItem value="story">Story</SelectItem>
+                          <SelectItem value="carousel">Carousel</SelectItem>
+                          <SelectItem value="live">Live</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <Table>
@@ -1170,8 +1230,7 @@ return (
                         <div className="flex justify-between w-full">
                           <Progress value={campaign.status === 'completed' ? 100 : campaign.engagementRate * 2} className="h-2 w-32" />
                           <div className="flex space-x-2">
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Edit3 className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Trash2 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleDeleteCampaign(campaign.id)}><Trash2 className="h-4 w-4" /></Button>
                           </div>
                         </div>
                       </CardFooter>
@@ -1282,8 +1341,7 @@ return (
                       </CardContent>
                       <CardFooter>
                         <div className="flex justify-end space-x-2">
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Edit3 className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Trash2 className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleDeleteAudience(segment.id)}><Trash2 className="h-4 w-4" /></Button>
                         </div>
                       </CardFooter>
                     </Card>
@@ -1387,8 +1445,7 @@ return (
                       <CardFooter>
                         <div className="flex justify-end space-x-2">
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setWorkflows(workflows.map(w => w.id === workflow.id ? { ...w, isActive: !w.isActive } : w))}>{workflow.isActive ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}</Button>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Edit3 className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Trash2 className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleDeleteWorkflow(workflow.id)}><Trash2 className="h-4 w-4" /></Button>
                         </div>
                       </CardFooter>
                     </Card>
@@ -1478,8 +1535,7 @@ return (
                       <CardFooter>
                         <div className="flex justify-end space-x-2">
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setWebhooks(webhooks.map(w => w.id === webhook.id ? { ...w, isActive: !w.isActive } : w))}>{webhook.isActive ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}</Button>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Edit3 className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Trash2 className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleDeleteWebhook(webhook.id)}><Trash2 className="h-4 w-4" /></Button>
                         </div>
                       </CardFooter>
                     </Card>
@@ -1603,8 +1659,7 @@ return (
                             </SelectContent>
                           </Select>
                           <div className="flex space-x-2">
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Edit3 className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0"><Trash2 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleDeleteIdea(idea.id)}><Trash2 className="h-4 w-4" /></Button>
                           </div>
                         </div>
                       </CardFooter>
